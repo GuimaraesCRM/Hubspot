@@ -1,0 +1,73 @@
+// Import the Hubspot NodeJS Client Library - this will allow us to use the HubSpot APIs
+const hubspot = require('@hubspot/api-client');
+
+/* 
+Essa função é chamada quando a ação de código personalizado é executada. São necessários 2 argumentos. O primeiro é o objeto de evento que contém informações sobre o objeto atualmente inscrito.
+A segunda é a função de retorno de chamada que é usada para passar dados de volta para o fluxo de trabalho.
+*/
+exports.main = (event, callback) => {
+  
+  // Instancie um novo cliente de api da hubspot usando a hapy key (secret)
+  const hubspotClient = new hubspot.Client({
+    accessToken: process.env.deals_associations
+  });
+  
+  // Recupere a propriedade "url_do_site" dos Negocios atualmente inscritos
+  hubspotClient.crm.deals.basicApi.getById(event.object.objectId, ["url_do_site"])
+    .then(results => {
+	// Obtenha dados dos resultados e armazene em variaveis
+	let urlEmpresa = results.body.properties.url_do_site;
+        //console.log("SEARCH TERM: " + urlEmpresa); // - Para DEBUG
+
+	// Criar criterios de pesquisa  
+	const filter = { propertyName: 'url_do_site', operator: 'EQ', value: urlEmpresa }
+	const filterGroup = { filters:	[filter] 	}
+        const sort = JSON.stringify({ propertyName: 'url_do_site', direction: 'DESCENDING'})
+        const properties = ['url_do_site']
+        const limit = 1
+        const after = 0
+        
+        const searchCriterio = {
+          filterGroups: [filterGroup],
+          sorts: [sort],
+          properties,
+          limit,
+          after
+        }
+    
+      // Pesquise no CRM empresas correspondentes à variavel "urlEmpresa" definida anteriormente
+      hubspotClient.crm.companies.searchApi.doSearch(searchCriterio).then(searchCompanyResponse => {
+        
+         //console.log("RESULTS: " + searchCompanyResponse.body.total); // - Para DEBUG
+ 
+         // Se o total for igual a 0 = nenhum resultado encontrado
+         if(searchCompanyResponse.body.total == 0){ //Nenhum resultado encontrado - Criar uma empresa e associar
+           // console.log("COMPANY " + urlEmpresa  + "Nao Encontrado: Criar + Associar") // - Para DEBUG
+           
+           //Criar objeto Empresa
+            const companyObj = {
+                properties: {
+                    name: urlEmpresa,
+                },
+            }
+           
+           //Criar a empresa usando o objeto empresa acima
+           hubspotClient.crm.companies.basicApi.create(companyObj).then(companyCreateResponse =>{
+             //Associar empresa ao negocio usando o ID retornado na solicitação anterior
+             hubspotClient.crm.companies.associationsApi.create(companyCreateResponse.body.id,'deals', event.object.objectId,'company_to_deal');
+           });
+           
+         }else{ //Resultado Encontrado - Associar Empresa a Negocio
+           // console.log("COMPANY " + urlEmpresa + " Encontrado: Associar Objetos"); // - Para DEBUG
+          //Associar negocio a empresa
+           hubspotClient.crm.companies.associationsApi.create(searchCompanyResponse.body.results[0].id,'deals', event.object.objectId,'company_to_deal');
+         }
+      });
+   
+      callback({outputFields: {}});
+    
+    })
+    .catch(err => {
+      console.error(err);
+    });
+}
