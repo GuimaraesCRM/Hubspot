@@ -1,0 +1,46 @@
+//This code is to associate a custom object (cnpj) to a company, based on properties shared between company and custom object.
+const hubspot = require('@hubspot/api-client');
+exports.main = async (event, callback) => {
+const hubspotClient = new hubspot.Client({
+accessToken: process.env.deals_associations //"deals_associations" pulled from Secrets
+});
+//General inputs
+
+const groupID = event.inputFields['group_id'];
+console.log(groupID);
+const ObjectTypeId = '2-8038327'; //ID do objeto personalizado.
+const applicationId = event.inputFields['hs_object_id'];
+console.log(applicationId);
+const toObjectType = "companies";
+const associationType = 'cnpj_to_empresa';
+//Search Constants
+const filter = { propertyName: 'group_id', operator: 'EQ', value: groupID }
+const filterGroup = { filters: [filter] }
+const sort = JSON.stringify({ propertyName: 'group_id', direction: 'DESCENDING' })
+const properties = ['group_id']
+const limit = 1
+const after = 0
+
+//Search criteria parameters
+const publicObjectSearchRequest = {
+filterGroups: [filterGroup],
+sorts: [sort],
+properties,
+limit,
+after,
+}
+try {
+//Search company. This will find the company id, based on groupID criteria.
+const searchResponse = await hubspotClient.crm.companies.searchApi.doSearch(publicObjectSearchRequest);
+console.log(searchResponse.results[0].id);
+
+//Associate to company. This will associate the custom object record to a company.
+const companyResponse = await hubspotClient.crm.objects.associationsApi.create(ObjectTypeId, applicationId, toObjectType, searchResponse.results[0].id, associationType);
+console.log(companyResponse);
+
+} catch (e) {
+e.message === 'HTTP request failed'
+? console.error(JSON.stringify(e.response, null, 2))
+: console.error(e)
+}
+}
