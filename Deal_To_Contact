@@ -1,0 +1,60 @@
+// Import the Hubspot NodeJS Client Library - this will allow us to use the HubSpot APIs
+const hubspot = require('@hubspot/api-client');
+
+/* 
+This function is called when the custom code action runs. 2 arguments are required. The first is the event object which contains information about the currently subscribed object.
+The second is the callback function which is used to pass data back to the workflow.
+*/
+exports.main = (event, callback) => {
+  
+  // Instantiate a new hubspot api client using the hapy key (secret)
+  const hubspotClient = new hubspot.Client({
+    accessToken: process.env.salesops
+  });
+  
+  // Retrieve the "e_mail_do_solicitante" property of the currently registered Deals
+  hubspotClient.crm.deals.basicApi.getById(event.object.objectId, ["e_mail_do_solicitante"])
+    .then(results => {
+	// Get result data and store it in variables
+	let emailDomain = results.body.properties.e_mail_do_solicitante;
+       
+	// Create Search criteria
+	const filter = { propertyName: 'email', operator: 'EQ', value: emailDomain }
+	const filterGroup = { filters:	[filter] 	}
+        const sort = JSON.stringify({ propertyName: 'email', direction: 'DESCENDING'})
+        const properties = ['email']
+        const limit = 1
+        const after = 0
+        
+        const searchCriterio = {
+          filterGroups: [filterGroup],
+          sorts: [sort],
+          properties,
+          limit,
+          after
+        }
+    
+      // Search the CRM for contacts corresponding to the "emailDomain" variable previously defined
+      hubspotClient.crm.contacts.searchApi.doSearch(searchCriterio).then(searchContactResponse => {
+        
+         //console.log("RESULTS: " + searchContactResponse.body.total); // - for DEBUG
+ 
+         // If total equals 0 = no results found
+         if(searchContactResponse.body.total == 0){ //No results found
+            console.log("CONTACT " + emailDomain  + "Not Found") // - for DEBUG
+
+           
+         }else{ //Result Found - Associate Contact to Deal
+           // console.log("CONTACT " + emailDomain + " Found: Associate Objects"); // - for DEBUG
+          //Associate deal to contact
+           hubspotClient.crm.contacts.associationsApi.create(searchContactResponse.body.results[0].id,'deals', event.object.objectId,'contact_to_deal');
+         }
+      });
+   
+      callback({outputFields: {}});
+    
+    })
+    .catch(err => {
+      console.error(err);
+    });
+}
