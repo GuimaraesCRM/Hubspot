@@ -1,0 +1,67 @@
+//This code ensures that all users specified in the code have the same number of leads at the end of the day. 
+//It can be useful if you want to conditionally distribute leads to each user. For example, 2 users will receive leads from source X, 
+//3 users will receive leads from source Y, and all users will receive leads from source Z. With this code, it will ensure that all users 
+//have the same number of leads at the end of the day.
+
+
+
+
+const hubspot = require('@hubspot/api-client');
+exports.main = async (event, callback) => {
+
+ // Hubspot private app Secret API
+ 
+  const hubspotClient = new hubspot.Client({
+    accessToken: process.env.salesops
+  });
+
+  // User IDs to search
+  
+  const userIds = [190515892, 212853118, 149792600, 147348877, 212853929, 135322450 ];
+const today = event.inputFields['data_atual_formatada'];
+  let minCount = Infinity;
+  let minUserId = null;
+
+  for (const userId of userIds) {
+    // Define search filters
+    const filter1 = { propertyName: 'hubspot_owner_id', operator: 'EQ', value: userId };
+    const filter2 = { propertyName: 'data_criacao_formatada', operator: 'EQ', value: today };
+    const filterGroup = { filters: [filter1, filter2] };
+
+    // Define search parameters
+    const properties = ['hubspot_owner_id'];
+    const publicObjectSearchRequest = {
+      filterGroups: [filterGroup],
+      properties,
+      limit: 1,
+      after: 0
+    };
+
+    // Perform the search.
+    try {
+      const searchResponse = await hubspotClient.crm.deals.searchApi.doSearch(publicObjectSearchRequest);
+      const count = searchResponse.total;
+      console.log (count);
+
+      // Check which user has the lowest number of transactions so far
+      if (count < minCount) {
+        minCount = count;
+        minUserId = userId;
+      }
+      
+
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  console.log(`O usuário ${minUserId} tem a menor quantidade de negócios: ${minCount}`);
+  
+  callback({
+    outputFields: {
+      user: minUserId
+    
+    }
+  });
+};
+
