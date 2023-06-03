@@ -57,6 +57,7 @@ const today = event.inputFields['data_atual_formatada'];
 
   console.log(`O usuário ${minUserId} tem a menor quantidade de negócios: ${minCount}`);
   
+  //Provide a callback on the found result to retrieve and save that value to a property within the workflow.
   callback({
     outputFields: {
       user: minUserId
