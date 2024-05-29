@@ -1,0 +1,48 @@
+import requests
+import os
+
+hs_app = os.environ.get('hs_app')
+
+# Funções
+# Solicitar associações
+def request_associations(object_type, hs_object_id, to_object_type):
+    url = f'https://api.hubapi.com/crm/v4/objects/{object_type}/{hs_object_id}/associations/{to_object_type}?limit=500'
+    headers = {'authorization': f'Bearer {hs_app}'}
+
+    req_association = requests.get(url, headers=headers)
+    return req_association.json()
+
+# Solicitar uma tarefa
+def request_a_task(task_id, hs_app):
+    url = f'https://api.hubapi.com/crm/v3/objects/call/{task_id}?properties=hs_call_disposition&archived=false'
+    headers = {'authorization': f'Bearer {hs_app}'}
+
+    req_task = requests.get(url, headers=headers)
+    return req_task.json()
+
+# Execução
+
+# Função principal
+def main(event):
+    hs_object_id = str(event["inputFields"]["hs_object_id"])
+
+    object_type, to_object_type = '2-17313055', 'call'  # Alteração: Mudando o to_object_type para 'call'
+    req_association = request_associations(object_type, hs_object_id, to_object_type)
+
+    call_found = False  # Variável para indicar se a chamada foi encontrada
+
+    for i in req_association['results']:
+        call_id = str(i['toObjectId'])
+        req_call = request_a_task(call_id, hs_app)
+
+        # Verificando se a chamada possui o resultado desejado na propriedade 'hs_call_disposition'
+        if 'hs_call_disposition' in req_call['properties'] and req_call['properties']['hs_call_disposition'] == 'f240bbac-87c9-4f6e-bf70-924b57d47db7':
+            call_found = True
+            break
+
+    return {
+        "outputFields": {
+            "hs_object_id": hs_object_id,
+            "call_found": "Sim" if call_found else "Não"  # Adicionando a propriedade 'call_found' nos outputFields
+        }
+    }
