@@ -1,0 +1,12 @@
+exports.main = async (event, callback) => {
+  
+var ca_date = event.inputFields['createdAt'];
+const unixTimeStamp = Date.parse(ca_date);
+  console.log(unixTimeStamp)
+  
+  callback({
+    outputFields: {
+      dateFormated: unixTimeStamp
+    }
+  });
+}
