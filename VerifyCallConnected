@@ -14,7 +14,7 @@ def request_associations(object_type, hs_object_id, to_object_type):
 
 # Solicitar uma tarefa
 def request_a_task(task_id, hs_app):
-    url = f'https://api.hubapi.com/crm/v3/objects/call/{task_id}?properties=hs_call_disposition&archived=false'
+    url = f'https://api.hubapi.com/crm/v3/objects/call/{task_id}?properties=hs_timestamp&properties=hs_call_disposition&archived=false'
     headers = {'authorization': f'Bearer {hs_app}'}
 
     req_task = requests.get(url, headers=headers)
@@ -38,11 +38,14 @@ def main(event):
         # Verificando se a chamada possui o resultado desejado na propriedade 'hs_call_disposition'
         if 'hs_call_disposition' in req_call['properties'] and req_call['properties']['hs_call_disposition'] == 'f240bbac-87c9-4f6e-bf70-924b57d47db7':
             call_found = True
+            createdAt = req_call['properties'].get('hs_timestamp')  # Obtendo o valor da propriedade 'hs_timestamp'
+            print("Timestamp da chamada:", createdAt)  # Imprimindo o valor para depuração
             break
 
     return {
         "outputFields": {
             "hs_object_id": hs_object_id,
-            "call_found": "Sim" if call_found else "Não"  # Adicionando a propriedade 'call_found' nos outputFields
+            "call_found": "Sim" if call_found else "Não",  # Adicionando a propriedade 'call_found' nos outputFields
+            "createdAt": createdAt  # Adicionando a variável 'createdAt' nos outputFields
         }
     }
