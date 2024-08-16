@@ -1,0 +1,83 @@
+const axios = require('axios');
+
+// Função principal do código personalizado
+exports.main = async (event, callback) => {
+    try {
+        const featureq = event.inputFields['feature_request'];
+        const featureq_detail = event.inputFields['descricao__feature_request'];
+        const hs_pipeline = event.inputFields['pipeline'];
+        const status = event.inputFields['deal_status'];
+        const value = event.inputFields['amount'];
+      
+        const pipelineMap = {
+    'default': 'Hunter',
+    '46580051': 'Inside Sales',
+    '63104867': 'Demanda Propria - Funil SDR',
+    '132593448': 'Representantes'
+  };
+        const pipeline = pipelineMap[hs_pipeline] || 'Pipeline não encontrada';
+        // Dados da nota com valores fixos
+        const noteTitle = "Hubspot";
+        const noteContent = `Feature Request: ${featureq}
+Feature Request - detalhes: ${featureq_detail}
+Pipeline: ${pipeline}
+Value: R$${value}
+Status do Deal: ${status}`;
+
+        // Obtendo o token da API do ProductBoard a partir das variáveis de ambiente
+        const productBoardApiKey = process.env.product_board;
+
+        if (!productBoardApiKey) {
+            throw new Error('Token da API do ProductBoard não está definido.');
+        }
+
+        // Extrair o ID do negocio do evento (se necessário para construir a URL)
+        const hsObjectId = event.inputFields['hs_object_id'];
+              // Extrair o email do contato do evento (se necessário para construir a URL)
+        const email = event.inputFields['e_mail'];
+      // console.log(email);
+
+        // Dados da nota que será criada no ProductBoard
+        const noteData = {
+            title: noteTitle,
+            content: noteContent,
+            display_url: `https://app.hubspot.com/contacts/24325742/record/0-3/${hsObjectId}/`,
+            user: {
+                email: email
+            },
+            source: {
+                origin: 'Hubspot',
+                record_id: hsObjectId  // ID do objeto do HubSpot
+            }
+        };
+
+        // Configuração do cabeçalho da solicitação
+        const headers = {
+            'Authorization': `Bearer ${productBoardApiKey}`,
+            'Content-Type': 'application/json',
+        };
+
+        // Endpoint da API do ProductBoard
+        const productBoardEndpoint = 'https://api.productboard.com/notes';
+
+        // Enviando a solicitação POST para criar a nota no ProductBoard
+        const response = await axios.post(productBoardEndpoint, noteData, { headers });
+      //console.log(response);
+
+        // Retornando a resposta da API do ProductBoard
+        callback({
+            outputFields: {
+                status: 'Nota criada com sucesso',
+                notelink: response.data.links.html,  // Retorna o link da nota criada
+            }
+        });
+    } catch (error) {
+        console.error('Erro ao criar nota no ProductBoard:', error);
+        callback({
+            outputFields: {
+                status: 'Erro ao criar nota',
+                errorMessage: error.message,
+            }
+        });
+    }
+};
