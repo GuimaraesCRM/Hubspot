@@ -1,0 +1,46 @@
+exports.main = async (event, callback) => {
+  try {
+    // Verifica se o campo 'createdAt' existe e não está vazio
+    if (!event.inputFields || !event.inputFields['fechado_stage_date']) {
+      throw new Error('Campo "fechado_stage_date" não encontrado');
+    }
+    
+    // Converte o valor de entrada para um número (assumindo que seja um timestamp Unix em milissegundos)
+    const unixTimeStamp = Number(event.inputFields['fechado_stage_date']);
+    
+    // Verifica se o timestamp é um número válido
+    if (isNaN(unixTimeStamp)) {
+      throw new Error('Timestamp inválido: não foi possível converter para número');
+    }
+    
+    // Cria um objeto Date a partir do timestamp Unix
+    const date = new Date(unixTimeStamp);
+    
+    // Subtrai 3 horas (em milissegundos)
+    date.setHours(date.getHours() - 3);
+    
+    // Formata a data para o formato 'YYYY-MM-DD HH:mm'
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // Meses começam do 0, então adiciona 1
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    
+    const formattedDate = `${year}-${month}-${day} ${hours}:${minutes}`;
+    
+    console.log(formattedDate);
+    
+    callback({
+      outputFields: {
+        dateFormated: formattedDate
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao processar o evento:', error);
+    callback({
+      outputFields: {
+        error: error.message
+      }
+    });
+  }
+}
