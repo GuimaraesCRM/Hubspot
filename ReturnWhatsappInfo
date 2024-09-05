@@ -1,0 +1,126 @@
+// Wf especifico para recuperar dados de Numero de telefone e nome do contato que veio atraves da integração de Whatsapp . Caso de uso: Contatos que enviaram mensagem no whatsapp porem nao estao cadastrados no hubspoot, esses contatos vão para o hubspot
+// sem nenhuma informação oou associação.
+const hubspot = require('@hubspot/api-client');
+
+// Instanciar o cliente da API do HubSpot
+const hubspotClient = new hubspot.Client({
+  accessToken: process.env.HubToken,
+});
+
+exports.main = async (event, callback) => {
+  const threadId = event.inputFields.hs_thread_id;
+
+  try {
+    // Fazer a chamada para o endpoint de mensagens da thread
+    const response = await hubspotClient.apiRequest({
+      method: 'GET',
+      path: `/conversations/v3/conversations/threads/${threadId}/messages`,
+      headers: {
+        'Accept-Encoding': 'gzip, deflate', // Aceitar respostas comprimidas
+      },
+    });
+
+    // Verifique se a resposta é um fluxo e trate os dados como fluxo
+    if (response.body && typeof response.body.on === 'function') {
+      let chunks = [];
+      
+      // Coletar os dados conforme eles chegam
+      response.body.on('data', (chunk) => {
+        chunks.push(chunk);
+      });
+
+      // Quando todos os dados chegarem, concatenar e processar
+      response.body.on('end', () => {
+        const buffer = Buffer.concat(chunks);
+        
+        try {
+          // Tentar converter o buffer em uma string e depois processar como JSON
+          const jsonResponse = JSON.parse(buffer.toString());
+
+          // Extração dos resultados
+          const messages = jsonResponse.results;
+
+          if (!messages || !Array.isArray(messages)) {
+            console.error('Nenhuma mensagem encontrada ou formato inesperado:', messages);
+            return callback({
+              outputFields: {
+                senders: [],
+              },
+            });
+          }
+
+          // Criar sets para armazenar valores únicos de name e deliveryIdentifier
+          const namesSet = new Set();
+          const deliveryIdentifiersSet = new Set();
+
+          // Processar os dados dos senders
+          const sendersInfo = messages
+            .map(message => {
+              if (message.senders && Array.isArray(message.senders)) {
+                return message.senders.map(sender => {
+                  if (sender.name && sender.deliveryIdentifier && sender.deliveryIdentifier.value) {
+                    namesSet.add(sender.name);
+                    deliveryIdentifiersSet.add(sender.deliveryIdentifier.value);
+                  }
+                  return {
+                    actorId: sender.actorId,
+                    name: sender.name || null,
+                    deliveryIdentifier: sender.deliveryIdentifier ? sender.deliveryIdentifier.value : null,
+                  };
+                });
+              }
+              return [];
+            })
+            .flat()
+            .filter(sender => sender.name !== null && sender.deliveryIdentifier !== null); // Filtrar valores nulos
+
+          // Converter os sets em arrays para armazenar os valores únicos
+          const names = Array.from(namesSet).join(', '); // Remover colchetes e aspas
+          const deliveryIdentifiersArray = Array.from(deliveryIdentifiersSet);
+          const deliveryIdentifiers = deliveryIdentifiersArray.join(', '); // Remover colchetes e aspas
+
+          // Criar o e-mail baseado apenas no primeiro deliveryIdentifier
+          const email = deliveryIdentifiersArray.length > 0 ? `${deliveryIdentifiersArray[0]}@gmail.com` : '';
+
+          // Logar as variáveis para verificação
+          console.log('Names:', names);
+          console.log('Delivery Identifiers:', deliveryIdentifiers);
+          console.log('Email:', email);
+
+          // Retornar os resultados
+          callback({
+            outputFields: {
+              senders: sendersInfo,
+              names,
+              deliveryIdentifiers,
+              email, // Apenas um e-mail com base no primeiro deliveryIdentifier
+            },
+          });
+
+        } catch (jsonError) {
+          console.error('Erro ao interpretar o JSON:', jsonError);
+          callback({
+            outputFields: {
+              senders: [],
+            },
+          });
+        }
+      });
+
+    } else {
+      console.error('A resposta não está em formato esperado.');
+      callback({
+        outputFields: {
+          senders: [],
+        },
+      });
+    }
+  } catch (error) {
+    console.error('Erro ao buscar mensagens da thread:', error.message);
+    callback({
+      outputFields: {
+        senders: [],
+      },
+    });
+  }
+};
